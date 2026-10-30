@@ -1,0 +1,528 @@
+---
+sidebar: sidebar 
+permalink: trident-use/gcnv-examples.html 
+keywords: trident backend, google cloud netapp volumes, nfs volumes, nfs 
+summary: Saiba mais sobre NFS e opções de configuração de backend NFS para o Google Cloud NetApp Volumes e veja exemplos de configuração. 
+---
+= Opções e exemplos de configuração do backend do Google Cloud NetApp Volumes
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Saiba mais sobre as opções de configuração de back-end para Google Cloud NetApp Volumes e veja exemplos de configuração.
+
+
+
+[[backend-configuration-options]]
+== Opções de configuração do backend
+
+Cada backend provisiona volumes em uma única região do Google Cloud. Para criar volumes em outras regiões, você pode definir backends adicionais.
+
+[cols="1, 2, 1"]
+|===
+| Parâmetro | Descrição | Padrão 
+
+
+| `version` |  | Sempre 1 
+
+
+| `storageDriverName` | Nome do driver de armazenamento | O valor de `storageDriverName` deve ser especificado como "google-cloud-netapp-volumes". 
+
+
+| `backendName` | (Opcional) Nome personalizado do storage backend | Nome do driver + "_" + parte da chave da API 
+
+
+| `storagePools` | Parâmetro opcional usado para especificar pools de storage para criação de volumes. |  
+
+
+| `projectNumber` | Número do projeto da conta do Google Cloud. O valor é encontrado na página inicial do portal do Google Cloud. |  
+
+
+| `location` | O local do Google Cloud onde Trident cria volumes GCNV. Ao criar clusters Kubernetes entre regiões, volumes criados em um  `location` podem ser usados em cargas de trabalho agendadas em nós em várias regiões do Google Cloud. O tráfego entre regiões gera um custo adicional. |  
+
+
+| `apiKey` | Chave de API para a conta de serviço do Google Cloud com a  `netapp.admin` função. Inclui o conteúdo formatado em JSON do arquivo de chave privada de uma conta de serviço do Google Cloud (copiado integralmente para o arquivo de configuração do backend). O  `apiKey` deve incluir pares de chave-valor para as seguintes chaves: `type`, `project_id`, `client_email`, `client_id`, `auth_uri`, `token_uri`, `auth_provider_x509_cert_url` e  `client_x509_cert_url`. |  
+
+
+| `nfsMountOptions` | Controle preciso das opções de montagem NFS. | "nfsvers=3" 
+
+
+| `limitVolumeSize` | Falhe no provisionamento se o tamanho do volume solicitado for superior a esse valor. | "" (não aplicado por padrão) 
+
+
+| `serviceLevel` | O nível de serviço de um pool de storage e seus volumes. Os valores são `flex`, `standard`, `premium`, ou `extreme`. |  
+
+
+| `labels` | Conjunto de rótulos arbitrários formatados em JSON para aplicar aos volumes | "" 
+
+
+| `network` | Rede Google Cloud usada para volumes GCNV. |  
+
+
+| `debugTraceFlags` | Sinalizadores de depuração para usar na resolução de problemas. Exemplo, `{"api":false, "method":true}`. Não use isso a menos que esteja solucionando problemas e precise de um despejo de log detalhado. | null 
+
+
+| `nasType` | Configurar a criação de volumes NFS ou SMB. As opções são  `nfs`,  `smb` ou null. Definir como null define volumes NFS por padrão. | `nfs` 
+
+
+| `supportedTopologies` | Representa uma lista de regiões e zonas suportadas por este backend. Para obter mais informações, consulte link:../trident-use/csi-topology.html["Usar a topologia CSI"]. Por exemplo:
+`supportedTopologies:
+- topology.kubernetes.io/region: asia-east1
+  topology.kubernetes.io/zone: asia-east1-a` |  
+|===
+
+
+[[volume-provisioning-options]]
+== Opções de provisionamento de volume
+
+Você pode controlar o provisionamento de volume padrão na seção  `defaults` do arquivo de configuração.
+
+[cols=",,"]
+|===
+| Parâmetro | Descrição | Padrão 
+
+
+| `exportRule` | As regras de exportação para novos volumes. Deve ser uma lista separada por vírgulas de qualquer combinação de endereços IPv4. | "0.0.0.0/0" 
+
+
+| `snapshotDir` | Acesso ao `.snapshot` diretório | `true`, `false` (o comportamento padrão pode variar. Defina explicitamente) "false" para NFSv3 
+
+
+| `snapshotReserve` | Percentual do volume reservado para snapshots | "" (aceitar padrão de 0) 
+
+
+| `unixPermissions` | As permissões unix de novos volumes (4 dígitos octais). | "" 
+|===
+
+
+[[example-configurations]]
+== Exemplos de configurações
+
+Os exemplos a seguir mostram configurações básicas que deixam a maioria dos parâmetros com os valores padrão. Esta é a maneira mais fácil de definir um backend.
+
+.Configuração mínima
+[%collapsible]
+====
+Esta é a configuração mínima absoluta de backend. Com esta configuração, Trident descobre todos os seus pools de storage delegados ao Google Cloud NetApp Volumes no local configurado e coloca novos volumes em um desses pools aleatoriamente. Como `nasType` foi omitido, o `nfs` padrão se aplica e o backend irá provisionar volumes NFS.
+
+Essa configuração é ideal para quem está começando a usar o Google Cloud NetApp Volumes e testando seus recursos, mas na prática pode ser necessário definir um escopo adicional para os volumes provisionados.
+
+
+NOTE: Substitua  `<id_value>` e  `<key_value>` pelas credenciais da sua conta de serviço.
+
+[source, yaml]
+----
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-tbc-gcnv-secret
+type: Opaque
+stringData:
+  private_key_id: "<id_value>"
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    <key_value>
+    -----END PRIVATE KEY-----
+---
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-gcnv
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes
+  projectNumber: "123455380079"
+  location: europe-west6
+  serviceLevel: premium
+  apiKey:
+    type: service_account
+    project_id: my-gcnv-project
+    client_email: myproject-prod@my-gcnv-project.iam.gserviceaccount.com
+    client_id: "103346282737811234567"
+    auth_uri: https://accounts.google.com/o/oauth2/auth
+    token_uri: https://oauth2.googleapis.com/token
+    auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+    client_x509_cert_url: https://www.googleapis.com/robot/v1/metadata/x509/myproject-prod%40my-gcnv-project.iam.gserviceaccount.com
+  credentials:
+    name: backend-tbc-gcnv-secret
+----
+====
+.Configuração para volumes SMB
+[%collapsible]
+====
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-gcnv1
+  namespace: trident
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes
+  projectNumber: "123456789"
+  location: asia-east1
+  serviceLevel: flex
+  nasType: smb
+  apiKey:
+    type: service_account
+    project_id: cloud-native-data
+    client_email: trident-sample@cloud-native-data.iam.gserviceaccount.com
+    client_id: "123456789737813416734"
+    auth_uri: https://accounts.google.com/o/oauth2/auth
+    token_uri: https://oauth2.googleapis.com/token
+    auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+    client_x509_cert_url: https://www.googleapis.com/robot/v1/metadata/x509/trident-sample%40cloud-native-data.iam.gserviceaccount.com
+  credentials:
+    name: backend-tbc-gcnv-secret
+----
+====
+.Configuração com filtro StoragePools
+[%collapsible]
+====
+[source, yaml]
+----
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-tbc-gcnv-secret
+type: Opaque
+stringData:
+  private_key_id: "<id_value>"
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    <key_value>
+    -----END PRIVATE KEY-----
+---
+
+---
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-gcnv
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes
+  projectNumber: "123455380079"
+  location: europe-west6
+  serviceLevel: premium
+  storagePools:
+    - premium-pool1-europe-west6
+    - premium-pool2-europe-west6
+  apiKey:
+    type: service_account
+    project_id: my-gcnv-project
+    client_email: myproject-prod@my-gcnv-project.iam.gserviceaccount.com
+    client_id: "103346282737811234567"
+    auth_uri: https://accounts.google.com/o/oauth2/auth
+    token_uri: https://oauth2.googleapis.com/token
+    auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+    client_x509_cert_url: https://www.googleapis.com/robot/v1/metadata/x509/myproject-prod%40my-gcnv-project.iam.gserviceaccount.com
+  credentials:
+    name: backend-tbc-gcnv-secret
+----
+====
+.Configuração de pool virtual
+[%collapsible]
+====
+Esta configuração de backend define vários pools virtuais em um único arquivo. Os pools virtuais são definidos na `storage` seção. Eles são úteis quando você tem vários pools de storage suportando diferentes níveis de serviço e deseja criar classes de storage no Kubernetes que os representem. Os rótulos dos pools virtuais são usados para diferenciá-los. Por exemplo, no exemplo abaixo `performance` label e `serviceLevel` type são usados para diferenciar os pools virtuais.
+
+Você também pode definir alguns valores padrão que serão aplicáveis a todos os pools virtuais e sobrescrever os valores padrão para pools virtuais individuais. No exemplo a seguir,  `snapshotReserve` e  `exportRule` servem como padrões para todos os pools virtuais.
+
+Para obter mais informações, consulte link:../trident-concepts/virtual-storage-pool.html["Pools virtuais"].
+
+[source, yaml]
+----
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-tbc-gcnv-secret
+type: Opaque
+stringData:
+  private_key_id: "<id_value>"
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    <key_value>
+    -----END PRIVATE KEY-----
+
+---
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-gcnv
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes
+  projectNumber: "123455380079"
+  location: europe-west6
+  apiKey:
+    type: service_account
+    project_id: my-gcnv-project
+    client_email: myproject-prod@my-gcnv-project.iam.gserviceaccount.com
+    client_id: "103346282737811234567"
+    auth_uri: https://accounts.google.com/o/oauth2/auth
+    token_uri: https://oauth2.googleapis.com/token
+    auth_provider_x509_cert_url: https://www.googleapis.com/oauth2/v1/certs
+    client_x509_cert_url: https://www.googleapis.com/robot/v1/metadata/x509/myproject-prod%40my-gcnv-project.iam.gserviceaccount.com
+  credentials:
+    name: backend-tbc-gcnv-secret
+  defaults:
+    snapshotReserve: "10"
+    exportRule: 10.0.0.0/24
+  storage:
+    - labels:
+        performance: extreme
+      serviceLevel: extreme
+      defaults:
+        snapshotReserve: "5"
+        exportRule: 0.0.0.0/0
+    - labels:
+        performance: premium
+      serviceLevel: premium
+    - labels:
+        performance: standard
+      serviceLevel: standard
+----
+====
+.Identidade na nuvem para GKE
+[%collapsible]
+====
+Ao instalar Trident com uma identidade de nuvem do GKE, os backends autenticam-se como uma identidade de carga de trabalho e omitem o `apiKey` bloco. A identidade de nuvem é configurada da mesma forma para ambos os drivers do Google Cloud NetApp Volumes. A única diferença é o `storageDriverName` valor: use `google-cloud-netapp-volumes` para volumes NAS (NFS ou SMB) e `google-cloud-netapp-volumes-san` para volumes SAN (iSCSI block).
+
+
+NOTE: O suporte à identidade na nuvem para o `google-cloud-netapp-volumes-san` driver requer Trident 26.06 ou posterior. Os volumes SAN são provisionados a partir de pools de storage Flex Unified, então defina  `serviceLevel` como  `flex`.
+
+.Driver NAS (<code>google-cloud-netapp-volumes</code>)
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-gcp-gcnv
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes
+  projectNumber: '012345678901'
+  network: gcnv-network
+  location: us-west2
+  serviceLevel: Premium
+  storagePool: pool-premium1
+----
+.Driver SAN (<code>google-cloud-netapp-volumes-san</code>)
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: backend-tbc-gcp-gcnv-san
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes-san
+  projectNumber: '012345678901'
+  network: gcnv-network
+  location: us-west2
+  serviceLevel: flex
+  storagePool: pool-flex1
+----
+====
+.Configuração de topologias suportadas
+[%collapsible]
+====
+Trident facilita o provisionamento de volumes para cargas de trabalho com base em regiões e zonas de disponibilidade. O  `supportedTopologies` bloco nesta configuração de backend é usado para fornecer uma lista de regiões e zonas por backend. Os valores de região e zona especificados aqui devem corresponder aos valores de região e zona dos rótulos em cada nó de cluster Kubernetes. Essas regiões e zonas representam a lista de valores permitidos que podem ser fornecidos em uma classe de armazenamento. Para classes de armazenamento que contêm um subconjunto das regiões e zonas fornecidas em um backend, Trident cria volumes na região e zona mencionadas. Para obter mais informações, consulte link:../trident-use/csi-topology.html["Usar a topologia CSI"].
+
+[source, yaml]
+----
+---
+version: 1
+storageDriverName: google-cloud-netapp-volumes
+subscriptionID: 9f87c765-4774-fake-ae98-a721add45451
+tenantID: 68e4f836-edc1-fake-bff9-b2d865ee56cf
+clientID: dd043f63-bf8e-fake-8076-8de91e5713aa
+clientSecret: SECRET
+location: asia-east1
+serviceLevel: flex
+supportedTopologies:
+  - topology.kubernetes.io/region: asia-east1
+    topology.kubernetes.io/zone: asia-east1-a
+  - topology.kubernetes.io/region: asia-east1
+    topology.kubernetes.io/zone: asia-east1-b
+
+----
+====
+
+
+[[whats-next]]
+== Qual é o próximo passo?
+
+Após criar o arquivo de configuração de backend, execute o seguinte comando:
+
+[listing]
+----
+kubectl create -f <backend-file>
+----
+Para verificar se o backend foi criado com sucesso, execute o seguinte comando:
+
+[listing]
+----
+kubectl get tridentbackendconfig
+
+NAME               BACKEND NAME       BACKEND UUID                           PHASE   STATUS
+backend-tbc-gcnv   backend-tbc-gcnv   b2fd1ff9-b234-477e-88fd-713913294f65   Bound   Success
+----
+Se a criação do backend falhar, há algo errado com a configuração do backend. Você pode descrever o backend usando o  `kubectl get tridentbackendconfig <backend-name>` comando ou visualizar os logs para determinar a causa executando o seguinte comando:
+
+[listing]
+----
+tridentctl logs
+----
+Após identificar e corrigir o problema com o arquivo de configuração, você pode excluir o backend e executar o comando create novamente.
+
+
+
+[[storage-class-definitions]]
+== Definições de classe de armazenamento
+
+A seguir está uma definição básica `StorageClass` que se refere ao backend acima.
+
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcnv-nfs-sc
+provisioner: csi.trident.netapp.io
+parameters:
+  backendType: "google-cloud-netapp-volumes"
+----
+*Exemplo de definições usando o  `parameter.selector` campo:*
+
+Usando `parameter.selector` você pode especificar para cada `StorageClass` o link:../trident-concepts/virtual-storage-pool.html["pool virtual"] que é usado para hospedar um volume. O volume terá os aspectos definidos no pool escolhido.
+
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: extreme-sc
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: performance=extreme
+  backendType: google-cloud-netapp-volumes
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: premium-sc
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: performance=premium
+  backendType: google-cloud-netapp-volumes
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard-sc
+provisioner: csi.trident.netapp.io
+parameters:
+  selector: performance=standard
+  backendType: google-cloud-netapp-volumes
+----
+Para mais detalhes sobre classes de armazenamento, consulte link:../trident-use/create-stor-class.html["Crie uma storage class"^].
+
+
+
+[[example-definitions-for-smb-volumes]]
+=== Exemplos de definições para volumes SMB
+
+Usando  `nasType`,  `node-stage-secret-name` e  `node-stage-secret-namespace`, você pode especificar um volume SMB e fornecer as credenciais necessárias do Active Directory. Qualquer usuário/senha do Active Directory com qualquer/nenhuma permissão pode ser usado para o segredo do estágio do nó.
+
+.Configuração básica no namespace padrão
+[%collapsible]
+====
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcnv-sc-smb
+provisioner: csi.trident.netapp.io
+parameters:
+  backendType: "google-cloud-netapp-volumes"
+  trident.netapp.io/nasType: "smb"
+  csi.storage.k8s.io/node-stage-secret-name: "smbcreds"
+  csi.storage.k8s.io/node-stage-secret-namespace: "default"
+----
+====
+.Usando segredos diferentes por namespace
+[%collapsible]
+====
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcnv-sc-smb
+provisioner: csi.trident.netapp.io
+parameters:
+  backendType: "google-cloud-netapp-volumes"
+  trident.netapp.io/nasType: "smb"
+  csi.storage.k8s.io/node-stage-secret-name: "smbcreds"
+  csi.storage.k8s.io/node-stage-secret-namespace: ${pvc.namespace}
+----
+====
+.Utilizando segredos diferentes em cada volume
+[%collapsible]
+====
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcnv-sc-smb
+provisioner: csi.trident.netapp.io
+parameters:
+  backendType: "google-cloud-netapp-volumes"
+  trident.netapp.io/nasType: "smb"
+  csi.storage.k8s.io/node-stage-secret-name: ${pvc.name}
+  csi.storage.k8s.io/node-stage-secret-namespace: ${pvc.namespace}
+----
+====
+
+NOTE: `nasType: smb`Filtros para pools que suportam volumes SMB. `nasType: nfs` ou  `nasType: null`filtros para pools NFS.
+
+
+
+[[pvc-definition-example]]
+=== Exemplo de definição de PVC
+
+[source, yaml]
+----
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gcnv-nfs-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gcnv-nfs-sc
+----
+Para verificar se o PVC está vinculado, execute o seguinte comando:
+
+[listing]
+----
+kubectl get pvc gcnv-nfs-pvc
+
+NAME          STATUS   VOLUME                                    CAPACITY  ACCESS MODES   STORAGECLASS AGE
+gcnv-nfs-pvc  Bound    pvc-b00f2414-e229-40e6-9b16-ee03eb79a213  100Gi     RWX            gcnv-nfs-sc  1m
+----

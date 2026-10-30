@@ -1,0 +1,25 @@
+---
+sidebar: sidebar 
+permalink: trident-use/backends.html 
+keywords: backends, storage system, anf, element, hci, solidfire, ontap, aff, fas, ontap select, configure backends, fsx 
+summary: Um backend define a relação entre Trident e um sistema de storage. Ele informa ao Trident como se comunicar com esse sistema de storage e como o Trident deve provisionar volumes a partir dele. 
+---
+= Configure os backends do Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Um backend define a relação entre Trident e um sistema de storage. Ele informa ao Trident como se comunicar com esse sistema de storage e como o Trident deve provisionar volumes a partir dele.
+
+Trident oferece automaticamente pools de armazenamento de backends que correspondem aos requisitos definidos por uma classe de armazenamento. Saiba como configurar o backend para o seu sistema de storage.
+
+* link:anf.html["Configurar um backend do Azure NetApp Files"^]
+* link:gcnv.html["Configurar um backend do Google Cloud NetApp Volumes"^]
+* link:element.html["Configurar um NetApp HCI ou SolidFire backend"^]
+* link:ontap-nas.html["Configure um backend com drivers NAS do ONTAP ou Cloud Volumes ONTAP"^]
+* link:ontap-san.html["Configure um backend com drivers SAN do ONTAP ou Cloud Volumes ONTAP"^]
+* link:trident-fsx.html["Use Trident com Amazon FSx for NetApp ONTAP"^]
+

@@ -1,0 +1,34 @@
+---
+sidebar: sidebar 
+permalink: trident-managing-k8s/upgrade-tridentctl.html 
+keywords: upgrade, trident, methods, operator, tridentctl, helm 
+summary: 'Você pode facilmente atualizar uma instalação existente do Trident usando  `tridentctl`.' 
+---
+= Atualize o Trident com tridentctl
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Você pode facilmente atualizar uma instalação existente do Trident usando  `tridentctl`.
+
+.Sobre esta tarefa
+Desinstalar e reinstalar Trident funciona como uma atualização. Ao desinstalar Trident, o Persistent Volume Claim (PVC) e o Persistent Volume (PV) usados pela implantação do Trident não são excluídos. Os PVs que já foram provisionados permanecerão disponíveis enquanto Trident estiver offline, e Trident provisionará volumes para quaisquer PVCs que forem criados nesse meio tempo, após voltar a ficar online.
+
+.Antes de começar
+Analise link:upgrade-trident.html#step-3-select-an-upgrade-method["Selecione um método de atualização"] antes de atualizar usando  `tridentctl`.
+
+.Passos
+. Execute o comando de desinstalação em `tridentctl` para remover todos os recursos associados ao Trident, exceto os CRDs e objetos relacionados.
++
+[listing]
+----
+./tridentctl uninstall -n <namespace>
+----
+. Reinstale Trident. Consulte link:../trident-install/kubernetes-deploy-tridentctl.html["Instale Trident usando tridentctl"].
+
+
+
+IMPORTANT: Não interrompa o processo de atualização. Certifique-se de que o instalador seja executado até o fim.

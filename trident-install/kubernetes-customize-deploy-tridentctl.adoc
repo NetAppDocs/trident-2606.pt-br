@@ -1,0 +1,47 @@
+---
+sidebar: sidebar 
+permalink: trident-install/kubernetes-customize-deploy-tridentctl.html 
+keywords: deploy, Trident, methods, operator, tridentctl, helm, attributes, customize 
+summary: Você pode usar o instalador Trident para personalizar a implantação. 
+---
+= Personalize a instalação do Trident tridentctl
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Você pode usar o instalador Trident para personalizar a instalação.
+
+
+
+[[learn-about-the-installer]]
+== Saiba mais sobre o instalador
+
+O instalador do Trident permite que você personalize atributos. Por exemplo, se você copiou a imagem do Trident para um repositório privado, pode especificar o nome da imagem usando  `--trident-image`. Se você copiou a imagem do Trident, assim como as imagens auxiliares CSI necessárias, para um repositório privado, pode ser preferível especificar a localização desse repositório usando o comando  `--image-registry`, que tem o formato  `<registry FQDN>[:port]`.
+
+
+IMPORTANT: Ao instalar Trident em um repositório privado, se você estiver usando o  `--image-registry` switch para especificar a localização do repositório, não use  `/netapp/` no caminho do repositório. Por exemplo: `./tridentctl install --image-registry <image-registry> -n <namespace>`
+
+Se você estiver usando uma distribuição do Kubernetes, onde  `kubelet` mantém seus dados em um caminho diferente do usual  `/var/lib/kubelet`, você pode especificar o caminho alternativo usando  `--kubelet-dir`.
+
+Se você precisar personalizar a instalação além do que os argumentos do instalador permitem, também poderá personalizar os arquivos de implantação. Usar o parâmetro  `--generate-custom-yaml` cria os seguintes arquivos YAML no diretório  `setup` do instalador:
+
+* `trident-clusterrolebinding.yaml`
+* `trident-deployment.yaml`
+* `trident-crds.yaml`
+* `trident-clusterrole.yaml`
+* `trident-daemonset.yaml`
+* `trident-service.yaml`
+* `trident-namespace.yaml`
+* `trident-serviceaccount.yaml`
+* `trident-resourcequota.yaml` *
+
+
+Após gerar esses arquivos, você pode modificá-los de acordo com suas necessidades e, em seguida, usar  `--use-custom-yaml` para instalar sua implantação personalizada.
+
+[source, console]
+----
+./tridentctl install -n trident --use-custom-yaml
+----

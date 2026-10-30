@@ -1,0 +1,53 @@
+---
+sidebar: sidebar 
+permalink: legal-notices.html 
+keywords: copyrights, notice, trademarks, patents, privacy, open source 
+summary: Avisos legais fornecem acesso a declarações de direitos autorais, marcas registradas, patentes e mais. 
+---
+= Avisos legais
+:allow-uri-read: 
+:icons: font
+:imagesdir: ./media/
+
+
+[role="lead"]
+Avisos legais fornecem acesso a declarações de direitos autorais, marcas registradas, patentes e mais.
+
+
+
+[[copyright]]
+== Direitos autorais
+
+link:https://www.netapp.com/company/legal/copyright/["https://www.netapp.com/company/legal/copyright/"^]
+
+
+
+[[trademarks]]
+== Marcas registradas
+
+NETAPP, o logotipo da NETAPP e as marcas listadas na página de Marcas Registradas da NetApp são marcas registradas da NetApp, Inc. Outros nomes de empresas e produtos podem ser marcas registradas de seus respectivos proprietários.
+
+link:https://www.netapp.com/company/legal/trademarks/["https://www.netapp.com/company/legal/trademarks/"^]
+
+
+
+[[patents]]
+== Patentes
+
+A lista atual de patentes detidas pela NetApp pode ser encontrada em:
+
+link:https://www.netapp.com/pdf.html?item=/media/11887-patentspage.pdf["https://www.netapp.com/pdf.html?item=/media/11887-patentspage.pdf"^]
+
+
+
+[[privacy-policy]]
+== Política de privacidade
+
+link:https://www.netapp.com/company/legal/privacy-policy/["https://www.netapp.com/company/legal/privacy-policy/"^]
+
+
+
+[[open-source]]
+== Código aberto
+
+Você pode consultar os direitos autorais e as licenças de terceiro usados no software NetApp para Trident no arquivo de avisos de cada versão em  https://github.com/NetApp/trident/[].

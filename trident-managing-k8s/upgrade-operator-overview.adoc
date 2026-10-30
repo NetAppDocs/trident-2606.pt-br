@@ -1,0 +1,59 @@
+---
+sidebar: sidebar 
+permalink: trident-managing-k8s/upgrade-operator-overview.html 
+keywords: upgrade, trident, operator, helm, controller, daemonset, node pods, rolling upgrade, zero downtime 
+summary: Antes de usar o operador Trident para atualizar o Trident, você deve entender os processos em segundo plano que ocorrem durante a atualização. Isso inclui alterações no controlador Trident, no Pod do controlador e nos Pods dos nós, e no DaemonSet dos nós que permitem atualizações contínuas. 
+---
+= Entenda o fluxo de trabalho de atualização do operador Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Antes de usar o operador Trident para atualizar o Trident, você deve entender os processos em segundo plano que ocorrem durante a atualização. Isso inclui alterações no controlador Trident, no Pod do controlador e nos Pods dos nós, e no DaemonSet dos nós que permitem atualizações contínuas.
+
+
+
+[[trident-operator-upgrade-handling]]
+== Gerenciamento de atualização do operador Trident
+
+Uma das muitas link:../trident-install/kubernetes-deploy.html["benefícios de usar o operador Trident"] maneiras de instalar e atualizar Trident é o gerenciamento automático de objetos do Trident e do Kubernetes sem interromper os volumes montados existentes. Dessa forma, Trident pode suportar atualizações sem inatividade, ou link:https://kubernetes.io/docs/tutorials/kubernetes-basics/update/update-intro/["_atualizações contínuas_"^]. Em particular, o operador do Trident se comunica com o cluster Kubernetes para:
+
+* Exclua e recrie a implantação do Trident Controller e o DaemonSet do nó.
+* Substitua o Trident Controller Pod e os Trident Node Pods por novas versões.
++
+** Se um nó não for atualizado, isso não impede que os nós restantes sejam atualizados.
+** Somente nós com um Trident Node Pod em execução podem montar volumes.
+
+
+
+
+
+TIP: Para obter mais informações sobre a arquitetura do Trident no cluster Kubernetes, consulte link:../trident-get-started/architecture.html["Arquitetura do Trident"^].
+
+
+
+[[operator-upgrade-workflow]]
+== Fluxo de trabalho de atualização do operador
+
+Ao iniciar uma atualização usando o Trident operator:
+
+. O *operador Trident*:
++
+.. Detecta a versão atualmente instalada do Trident (versão _n_).
+.. Atualiza todos os objetos do Kubernetes, incluindo CRDs, RBAC e Trident SVC.
+.. Exclui a implantação do Trident Controller para a versão _n_.
+.. Cria a implantação do Trident Controller para a versão _n+1_.
+
+
+. *Kubernetes* cria o Pod do Controlador Trident para _n+1_.
+. O *operador Trident*:
++
+.. Exclui o Trident Node DaemonSet para _n_. O operador não espera pelo término do Pod do nó.
+.. Cria o Daemonset Trident Node para _n+1_.
+
+
+. *Kubernetes* cria Trident Node Pods em nós que não estão executando Trident Node Pod _n_. Isso garante que nunca haja mais de um Trident Node Pod, de qualquer versão, em um nó.
+

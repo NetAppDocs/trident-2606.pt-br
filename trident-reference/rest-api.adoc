@@ -1,0 +1,71 @@
+---
+sidebar: sidebar 
+permalink: trident-reference/rest-api.html 
+keywords: rest api, get, post, json, object, backends 
+summary: Você pode usar o endpoint REST diretamente, caso prefira interagir com a API REST do Trident. 
+---
+= API REST Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Embora link:../trident-managing-k8s/tridentctl.html["Comandos e opções do tridentctl"] sejam a maneira mais fácil de interagir com a Trident API REST, você pode usar o endpoint REST diretamente se preferir.
+
+
+
+[[when-to-use-the-rest-api]]
+== Quando usar a API REST
+
+API REST é útil para instalações avançadas que usam Trident como um binário independente em implantações não-Kubernetes.
+
+Para maior segurança, o Trident `REST API` é restrito ao localhost por padrão quando executado dentro de um pod. Para alterar esse comportamento, você precisa definir o argumento do Trident `-address` em sua configuração de pod.
+
+
+
+[[using-rest-api]]
+== Usando API REST
+
+Para exemplos de como essas APIs são chamadas, passe a flag (`-d` de debug. Para obter mais informações, consulte link:../trident-managing-k8s/tridentctl.html["Gerencie Trident usando tridentctl"].
+
+A API funciona da seguinte forma:
+
+
+
+[[get]]
+=== GET
+
+`GET <trident-address>/trident/v1/<object-type>`:: Lista todos os objetos desse tipo.
+`GET <trident-address>/trident/v1/<object-type>/<object-name>`:: Obtém os detalhes do objeto nomeado.
+
+
+
+
+[[post]]
+=== POST
+
+`POST <trident-address>/trident/v1/<object-type>`:: Cria um objeto do tipo especificado.
++
+--
+* Requer uma configuração JSON para o objeto a ser criado. Para a especificação de cada tipo de objeto, consulte link:../trident-managing-k8s/tridentctl.html["Gerencie Trident usando tridentctl"].
+* Se o objeto já existir, o comportamento varia: backends atualizam o objeto existente, enquanto todos os outros tipos de objeto falharão a operação.
+
+
+--
+
+
+
+
+[[delete]]
+=== EXCLUIR
+
+`DELETE <trident-address>/trident/v1/<object-type>/<object-name>`:: Exclui o recurso nomeado.
++
+--
+
+NOTE: Os volumes associados a backends ou classes de armazenamento continuarão a existir; estes devem ser excluídos separadamente. Para obter mais informações, consulte link:../trident-managing-k8s/tridentctl.html["Gerencie Trident usando tridentctl"].
+
+--
+

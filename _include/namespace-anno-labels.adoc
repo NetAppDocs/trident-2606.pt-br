@@ -1,0 +1,90 @@
+= Anotações e rótulos de namespace durante operações de restauração e failover
+:allow-uri-read: 
+
+
+
+
+[[namespace-annotations-and-labels-during-restore-and-failover-operations]]
+== Anotações e rótulos de namespace durante operações de restauração e failover
+
+Durante as operações de restauração e failover, os rótulos e anotações no namespace de destino são ajustados para corresponder aos rótulos e anotações no namespace de origem. Rótulos ou anotações do namespace de origem que não existem no namespace de destino são adicionados, e quaisquer rótulos ou anotações já existentes são sobrescritos para corresponder ao valor do namespace de origem. Rótulos ou anotações que existem apenas no namespace de destino permanecem inalterados.
+
+
+NOTE: Se você usa Red Hat OpenShift, é importante observar o papel crucial das anotações de namespace em ambientes OpenShift. As anotações de namespace garantem que os pods restaurados sigam as permissões e configurações de segurança apropriadas definidas pelas restrições de contexto de segurança (SCCs) do OpenShift e possam acessar volumes sem problemas de permissão. Para mais informações, consulte link:https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/authentication_and_authorization/managing-pod-security-policies["OpenShift security context constraints documentação"^].
+
+Você pode impedir que anotações específicas no namespace de destino sejam sobrescritas definindo a variável de ambiente do Kubernetes  `RESTORE_SKIP_NAMESPACE_ANNOTATIONS` antes de executar a operação de restauração ou failover. Por exemplo:
+
+[source, console]
+----
+helm upgrade trident-protect -n trident-protect netapp-trident-protect/trident-protect \
+  --set-string restoreSkipNamespaceAnnotations="{<annotation_key_to_skip_1>,<annotation_key_to_skip_2>}" \
+  --reuse-values
+----
+
+NOTE: Ao executar uma operação de restauração ou failover, quaisquer anotações e rótulos de namespace especificados em  `restoreSkipNamespaceAnnotations` e  `restoreSkipNamespaceLabels` são excluídos da operação de restauração ou failover. Certifique-se de que essas configurações sejam definidas durante a instalação inicial do Helm. Para saber mais, consulte link:../trident-protect/trident-protect-customize-installation.html#configure-additional-trident-protect-helm-chart-settings["Configurar configurações adicionais do helm chart do Trident Protect"].
+
+Se você instalou o aplicativo de origem usando Helm com a  `--create-namespace` flag, um tratamento especial é dado à chave de rótulo  `name`. Durante o processo de restauração ou failover, Trident Protect copia esse rótulo para o namespace de destino, mas atualiza o valor para o valor do namespace de destino se o valor da origem corresponder ao namespace de origem. Se esse valor não corresponder ao namespace de origem, ele é copiado para o namespace de destino sem alterações.
+
+
+
+[[example]]
+=== Exemplo
+
+O exemplo a seguir apresenta um namespace de origem e um de destino, cada um com anotações e rótulos diferentes. Você pode ver o estado do namespace de destino antes e depois da operação, e como as anotações e os rótulos são combinados ou sobrescritos no namespace de destino.
+
+
+
+==== Antes da operação de restauração ou failover
+
+A tabela a seguir ilustra o estado dos namespaces de origem e destino do exemplo antes da operação de restauração ou failover:
+
+[cols="1,2a,2a"]
+|===
+| Espaço de nomes | Anotações | Etiquetas 
+
+
+| Namespace ns-1 (fonte)  a| 
+* annotation.one/key: "valoratualizado"
+* anotação.dois/chave: "true"
+
+ a| 
+* ambiente=produção
+* compliance=hipaa
+* name=ns-1
+
+
+
+
+| Espaço de nomes ns-2 (destino)  a| 
+* annotation.one/key: "true"
+* anotação.three/chave: "falso"
+
+ a| 
+* role=database
+
+
+|===
+
+
+==== Após a operação de restauração
+
+A tabela a seguir ilustra o estado do namespace de destino de exemplo após a operação de restauração ou failover. Algumas chaves foram adicionadas, outras foram sobrescritas e o  `name` rótulo foi atualizado para corresponder ao namespace de destino:
+
+[cols="1,2a,2a"]
+|===
+| Espaço de nomes | Anotações | Etiquetas 
+
+
+| Espaço de nomes ns-2 (destino)  a| 
+* annotation.one/key: "valoratualizado"
+* anotação.dois/chave: "true"
+* anotação.three/chave: "falso"
+
+ a| 
+* name=ns-2
+* compliance=hipaa
+* ambiente=produção
+* role=database
+
+
+|===

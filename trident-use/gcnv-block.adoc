@@ -1,0 +1,348 @@
+---
+sidebar: sidebar 
+permalink: trident-use/gcnv-block.html 
+keywords: Trident backend, Google Cloud NetApp Volumes, iSCSI, SAN, block storage, Flex Unified pools, GKE 
+summary: 'Configure o Trident para provisionar volumes em bloco (iSCSI) do Google Cloud NetApp Volumes Flex Unified pools.' 
+---
+= Configurar o Google Cloud NetApp Volumes para cargas de trabalho SAN
+:allow-uri-read: 
+
+
+[role="lead"]
+Você pode configurar Trident para provisionar volumes de armazenamento em bloco usando o protocolo iSCSI do Google Cloud NetApp Volumes. Os volumes SAN são provisionados a partir de pools de armazenamento Flex Unified usando o  `google-cloud-netapp-volumes-san` driver de armazenamento.
+
+
+NOTE: Este driver é dedicado a cargas de trabalho em bloco e não oferece suporte a protocolos NAS.
+
+
+NOTE: O  `google-cloud-netapp-volumes-san`backend é necessário para provisionar volumes de bloco iSCSI. O  `google-cloud-netapp-volumes`backend suporta apenas protocolos NAS e não pode ser usado para cargas de trabalho SAN.
+
+
+
+[[overview]]
+== Visão geral
+
+Trident oferece suporte ao Google Cloud NetApp Volumes SAN (iSCSI) para cargas de trabalho usando o driver  `google-cloud-netapp-volumes-san`.
+
+Os volumes SAN são provisionados a partir de pools de armazenamento Flex Unified e apresentados aos nós do Kubernetes como dispositivos de bloco iSCSI.
+
+Isso se aplica aos seguintes ambientes:
+
+* Trident 26.02 e posteriores
+* Google Kubernetes Engine (GKE) ou Red Hat OpenShift
+* Pools de storage unificado do Google Cloud NetApp Volumes Flex
+* Cargas de trabalho baseadas em iSCSI
+
+
+
+
+[[flex-unified-storage-pools]]
+== Pools de storage unificado Flex
+
+Os pools de armazenamento Flex Unified fornecem armazenamento em bloco usando o protocolo iSCSI e são necessários para o provisionamento de SAN:
+
+* Os pools regionais Flex Unified são suportados.
+* Os pools Zonais unificados Flex são suportados a partir do Trident 26.02.1.
+* Apenas o nível de serviço *Flex* é compatível com cargas de trabalho SAN.
+
+
+
+
+[[configure-a-trident-san-backend]]
+== Configurar um backend SAN do Trident
+
+[source, yaml]
+----
+apiVersion: trident.netapp.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: gcnv-san
+  namespace: trident
+spec:
+  version: 1
+  storageDriverName: google-cloud-netapp-volumes-san
+  projectNumber: "<project-number>"
+  location: "<region>"
+  sdkTimeout: "600"
+  storage:
+  - labels:
+      cloud: gcp
+      performance: flex
+    network: "<vpc-network>"
+    serviceLevel: Flex
+----
+
+
+[[create-a-storageclass]]
+== Crie um StorageClass
+
+Após configurar o backend SAN, crie um StorageClass que faça referência ao  `google-cloud-netapp-volumes-san` driver.
+
+O tipo de sistema de arquivos é definido no StorageClass, não no backend.
+
+[source, yaml]
+----
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcnv-san
+provisioner: csi.trident.netapp.io
+parameters:
+  backendType: "google-cloud-netapp-volumes-san"
+  fsType: "ext4"
+allowVolumeExpansion: true
+----
+Tipos de sistemas de arquivos suportados:
+
+* `ext4` (padrão)
+* `ext3`
+* `xfs`
+
+
+
+NOTE: O driver SAN suporta apenas o nível de serviço Flex e não utiliza parâmetros de backend específicos do NAS, como  `exportRule`, `unixPermissions`, `nasType`, `snapshotDir`, `nfsMountOptions` ou configurações relacionadas ao tiering.
+
+
+
+[[provision-block-volumes]]
+== Provisionar volumes de bloco
+
+
+
+[[readwriteonce-rwo]]
+=== ReadWriteOnce (RWO)
+
+[source, yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gcnv-san-rwo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gcnv-san
+----
+
+
+[[readwriteoncepod-rwop]]
+=== ReadWriteOncePod (RWOP)
+
+[source, yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gcnv-san-rwop
+spec:
+  accessModes:
+    - ReadWriteOncePod
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gcnv-san
+----
+
+
+[[readonlymany-rox]]
+=== ReadOnlyMany (ROX)
+
+Um padrão comum para o ROX é clonar um volume ReadWriteOnce existente e montar o clone como somente leitura.
+
+[source, yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gcnv-san-rox
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gcnv-san
+  dataSource:
+    kind: PersistentVolumeClaim
+    name: gcnv-san-rwo
+----
+
+
+[[readwritemany-rwx-raw-block-only]]
+=== ReadWriteMany (RWX) — somente bloco bruto
+
+ReadWriteMany é suportado somente quando  `volumeMode: Block`.
+
+[source, yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gcnv-san-raw-rwx
+spec:
+  accessModes:
+    - ReadWriteMany
+  volumeMode: Block
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gcnv-san
+----
+
+
+[[block-volume-behavior]]
+== Comportamento do volume do bloco
+
+Os volumes de bloco são provisionados como LUNs iSCSI e apresentados aos nós do Kubernetes como dispositivos de bloco.
+
+Volumes de bloco:
+
+* Use o protocolo iSCSI
+* Suporte ao sistema de arquivos e apresentação de blocos brutos
+* Estão anexados e gerenciados pela Trident
+* Suporte a múltiplos modos de acesso do Kubernetes
+
+
+
+
+[[access-modes]]
+== Modos de acesso
+
+Os volumes de bloco provisionados pelo Trident suportam os seguintes modos de acesso:
+
+* `ReadWriteOnce` (RWO)
+* `ReadOnlyMany` (ROX)
+* `ReadWriteOncePod` (RWOP)
+* `ReadWriteMany` (RWX), suportado somente quando `volumeMode: Block`
+
+
+
+
+[[volumemode-behavior]]
+== Comportamento do volumeMode
+
+O  `volumeMode` campo controla como um volume de bloco é exposto:
+
+* `Filesystem` Trident formata e monta o volume.
+* `Block` Trident conecta o dispositivo e o expõe como um dispositivo de bloco raw.
+
+
+
+
+[[supported-operations]]
+== Operações suportadas
+
+Volumes de bloco provisionados usando o driver  `google-cloud-netapp-volumes-san` oferecem suporte a:
+
+* Criar
+* Excluir
+* Clonar
+* Snapshot
+* Redimensionar
+* Importar
+
+
+
+
+[[extra-gib-overprovisioning-behavior]]
+== Comportamento de sobreprovisionamento de GiB extra
+
+Os volumes em bloco do Google Cloud NetApp Volumes incluem sobrecarga de metadados internos. Essa sobrecarga reduz o tamanho do dispositivo visível para o kernel em comparação com a capacidade provisionada.
+
+Os testes mostram:
+
+* Aproximadamente 300 KiB de sobrecarga na criação inicial
+* Até aproximadamente 107 MiB de overhead após um redimensionamento
+
+
+Como o Google Cloud NetApp Volumes aceita apenas alocações de GiB inteiros, Trident garante que o tamanho utilizável do dispositivo sempre atenda ou exceda a solicitação do PVC por:
+
+* Arredondando o tamanho solicitado para o próximo GiB inteiro
+* Adicionando um buffer adicional de 1 GiB
+
+
+Exemplo:
+
+* Pedido de PVC: 100 GiB
+* Tamanho provisionado no Google Cloud NetApp Volumes: 101 GiB
+* Espaço utilizável visível para a aplicação: pelo menos 100 GiB
+
+
+
+
+[[pod-examples]]
+== Exemplos de pods
+
+
+
+[[filesystem-mounted-block-volume-rwo]]
+=== Volume de bloco montado no sistema de arquivos (RWO)
+
+[source, yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-rwo
+spec:
+  containers:
+  - name: app
+    image: ubuntu:22.04
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: data
+      mountPath: /mnt/data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: gcnv-san-rwo
+----
+
+
+[[raw-block-device-rwx]]
+=== Dispositivo de bloco bruto (RWX)
+
+[source, yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-raw-rwx
+spec:
+  containers:
+  - name: app
+    image: ubuntu:22.04
+    command: ["sleep", "infinity"]
+    volumeDevices:
+    - name: data
+      devicePath: /dev/xda
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: gcnv-san-raw-rwx
+----
+
+
+[[attach-and-mount-behavior]]
+== Comportamento de attach e montagem
+
+Para volumes SAN provisionados a partir do Google Cloud NetApp Volumes:
+
+* Trident cria um Número de Unidade Lógica (LUN) em um pool de storage Flex Unified.
+* Durante a publicação, Trident mapeia o LUN para um grupo de hosts por nó.
+* Durante o preparo do nó, Trident:
++
+** Faz login no destino iSCSI
+** Descobre o LUN
+** Configura multipath
+
+
+* Se `volumeMode: Filesystem`, o Trident formata o dispositivo, se necessário, e o monta.
+* Se  `volumeMode: Block`Trident anexar o dispositivo e expô-lo diretamente ao pod sem formatar ou montar.
+
+
+
+NOTE: Os volumes de bloco SAN não oferecem bloqueio distribuído nem coordenação de gravação. Quando um volume de bloco é acessado por vários nós (ReadWriteMany com  `volumeMode: Block`), o aplicativo ou o sistema de arquivos deve gerenciar a concorrência.

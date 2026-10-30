@@ -1,0 +1,93 @@
+---
+sidebar: sidebar 
+permalink: trident-protect/trident-protect-upgrade.html 
+keywords: trident, protect, netapp, upgrade, new, version 
+summary: Você pode atualizar Trident Protect para a versão mais recente para aproveitar novos recursos ou correções de bugs. 
+---
+= Atualizar Trident Protect
+:hardbreaks:
+:allow-uri-read: 
+:nofooter: 
+:icons: font
+:linkattrs: 
+:imagesdir: ../media/
+
+
+[role="lead"]
+Você pode atualizar Trident Protect para a versão mais recente para aproveitar novos recursos ou correções de bugs.
+
+[NOTE]
+====
+* Ao atualizar da versão 24.10, snapshots em execução durante a atualização podem falhar. Essa falha não impede que snapshots futuros, sejam manuais ou agendados, sejam criados. Se um snapshot falhar durante a atualização, você pode criar manualmente um novo snapshot para garantir que seu aplicativo esteja protegido.
++
+Para evitar possíveis falhas, você pode desativar todos os agendamentos de snapshots antes da atualização e reativá-los posteriormente. No entanto, isso resulta na perda de quaisquer snapshots agendados durante o período de atualização.
+
+* Para instalações em registros privados, certifique-se de que o Helm chart e as imagens necessárias para a versão de destino estejam disponíveis em seu registro privado e verifique se seus valores Helm personalizados são compatíveis com a nova versão do chart. Para obter mais informações, consulte link:trident-protect-installation.html["Instale Trident Protect a partir de um registro privado"].
+
+
+====
+
+
+[[step-1-select-a-version]]
+== Passo 1: selecione uma versão
+
+As versões do Trident Protect seguem uma convenção de nomenclatura baseada em datas `YY.MM`, onde "YY" são os dois últimos dígitos do ano e "MM" é o mês. As versões com ponto seguem uma `YY.MM.X` convenção, onde "X" é o nível de patch. Você selecionará a versão para atualizar com base na versão da qual está atualizando.
+
+* Você pode realizar uma atualização direta para qualquer versão de destino que esteja dentro de um intervalo de quatro versões da sua versão instalada. Por exemplo, você pode atualizar diretamente de 24.10 (ou qualquer versão secundária de 24.10) para 25.10.
+* Se você estiver atualizando de uma versão fora do período de quatro versões, execute uma atualização em várias etapas. Use as instruções de atualização para a link:../earlier-versions.html["versão anterior"] da qual você está atualizando para atualizar para a versão mais recente que se encaixe no período de quatro versões. Por exemplo, se você estiver executando a versão 24.10 e quiser atualizar para a 26.06:
++
+.. Primeira atualização da 24.10 para a 25.02.
+.. Em seguida, atualize de 25.02 para 26.06.
+
+
+
+
+
+
+[[step-2-upgrade-trident-protect]]
+== Etapa 2: atualize Trident Protect
+
+Para atualizar Trident Protect, execute as seguintes etapas.
+
+.Passos
+. Atualize o repositório do Trident:
++
+[source, console]
+----
+helm repo update
+----
+. Atualize os CRDs do Trident Protect:
++
+
+NOTE: Esta etapa é necessária se você estiver atualizando de uma versão anterior à 25.06, pois os CRDs agora estão incluídos no Helm chart do Trident Protect.
+
++
+.. Execute este comando para transferir o gerenciamento de CRDs de  `trident-protect-crds` para  `trident-protect`:
++
+[source, console]
+----
+kubectl get crd | grep protect.trident.netapp.io | awk '{print $1}' | xargs -I {} kubectl patch crd {} --type merge -p '{"metadata":{"annotations":{"meta.helm.sh/release-name": "trident-protect"}}}'
+----
+.. Execute este comando para excluir o segredo do Helm para o  `trident-protect-crds` chart:
++
+
+NOTE: Não desinstale o  `trident-protect-crds` chart usando o Helm, pois isso pode remover seus CRDs e quaisquer dados relacionados.
+
++
+[source, console]
+----
+kubectl delete secret -n trident-protect -l name=trident-protect-crds,owner=helm
+----
+
+
+. Atualizar Trident Protect:
++
+[source, console]
+----
+helm upgrade trident-protect netapp-trident-protect/trident-protect --version 100.2606.0 --namespace trident-protect
+----
++
+
+NOTE: Você pode configurar o nível de registro durante a atualização adicionando  `--set logLevel=debug` ao comando de atualização. O nível de registro padrão é  `warn`. O registro de depuração é recomendado para solução de problemas, pois ajuda a equipe de suporte da NetApp a diagnosticar problemas sem exigir alterações no nível de registro ou reprodução do problema.
+
+

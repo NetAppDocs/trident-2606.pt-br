@@ -1,0 +1,107 @@
+---
+sidebar: sidebar 
+permalink: trident-protect/trident-protect-generate-support-bundle.html 
+keywords: trident, protect, bundle, support, netapp, custom, resource, file 
+summary: 'Trident Protect permite que os administradores gerem pacotes que incluem informações úteis para o NetApp Support, incluindo logs, métricas e informações de topologia sobre os clusters e aplicativos sob gerenciamento. Se você estiver conectado à Internet, poderá enviar pacotes de suporte para o site de suporte da NetApp (NSS) usando um arquivo de recurso personalizado (CR).' 
+---
+= Gerar um pacote de suporte Trident Protect
+:hardbreaks:
+:allow-uri-read: 
+:nofooter: 
+:icons: font
+:linkattrs: 
+:imagesdir: ../media/
+
+
+[role="lead"]
+Trident Protect permite que os administradores gerem pacotes que incluem informações úteis para o NetApp Support, incluindo logs, métricas e informações de topologia sobre os clusters e aplicativos sob gerenciamento. Se você estiver conectado à internet, poderá enviar pacotes de suporte para o site de suporte da NetApp (NSS) usando um arquivo de recurso personalizado (CR).
+
+[role="tabbed-block"]
+====
+.Crie um pacote de suporte usando um CR
+--
+.Passos
+. Crie o arquivo de recurso personalizado (CR) e dê um nome a ele (por exemplo, `trident-protect-support-bundle.yaml`).
+. Configurar os seguintes atributos:
++
+** *metadata.name*: (_Obrigatório_) O nome deste recurso personalizado; escolha um nome único e adequado ao seu ambiente.
+** *spec.triggerType*: (_Obrigatório_) Determina se o pacote de suporte é gerado imediatamente ou agendado. A geração agendada do pacote ocorre às 00h UTC. Valores possíveis:
++
+*** Agendado
+*** Manual
+
+
+** *spec.uploadEnabled*: (_Opcional_) Controla se o pacote de suporte deve ser carregado no site de suporte da NetApp após ser gerado. Se não for especificado, o padrão é  `false`. Valores possíveis:
++
+*** verdadeiro
+*** falso (default)
+
+
+** *spec.dataWindowStart*: (_Opcional_) Uma string de data no formato RFC 3339 que especifica a data e hora em que a janela de dados incluída no pacote de suporte deve começar. Se não for especificado, o padrão é 24 horas atrás. A data mais antiga da janela que você pode especificar é 7 dias atrás.
++
+Exemplo YAML:
+
++
+[source, yaml]
+----
+---
+apiVersion: protect.trident.netapp.io/v1
+kind: AutoSupportBundle
+metadata:
+  name: trident-protect-support-bundle
+spec:
+  triggerType: Manual
+  uploadEnabled: true
+  dataWindowStart: 2024-05-05T12:30:00Z
+----
+
+
+. Depois de preencher o  `trident-protect-support-bundle.yaml` file com os valores corretos, aplique a CR:
++
+[source, console]
+----
+kubectl apply -f trident-protect-support-bundle.yaml -n trident-protect
+----
+
+
+--
+.Crie um pacote de suporte usando a CLI
+--
+.Passos
+. Crie o pacote de suporte, substituindo os valores entre colchetes pelas informações do seu ambiente. O `trigger-type` determina se o pacote será criado imediatamente ou se o horário de criação será definido pelo agendamento, e pode ser `Manual` ou `Scheduled`. A configuração padrão é `Manual`.
++
+Por exemplo:
+
++
+[source, console]
+----
+tridentctl-protect create autosupportbundle <my-bundle-name> --trigger-type <trigger-type> -n trident-protect
+----
+
+
+--
+====
+
+
+[[monitor-and-retrieve-the-support-bundle]]
+== Monitore e recupere o pacote de suporte
+
+Após criar um pacote de suporte usando qualquer um dos métodos, você pode monitorar o progresso da geração e recuperá-lo para seu sistema local.
+
+.Passos
+. Aguarde até que o  `status.generationState` atinja o estado  `Completed`. Você pode monitorar o progresso da geração com o seguinte comando:
++
+[source, console]
+----
+kubectl get autosupportbundle trident-protect-support-bundle -n trident-protect
+----
+. Recupere o pacote de suporte para o seu sistema local. Obtenha o comando de cópia do pacote AutoSupport concluído:
++
+[source, console]
+----
+kubectl describe autosupportbundle trident-protect-support-bundle -n trident-protect
+----
++
+Localize o comando  `kubectl cp` na saída e execute-o, substituindo o argumento de destino pelo diretório local de sua preferência.
+
+

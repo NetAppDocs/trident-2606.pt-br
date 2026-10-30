@@ -1,0 +1,28 @@
+---
+sidebar: sidebar 
+permalink: trident-use/vol-operations.html 
+keywords: snapshots, volumes, csi topology, storage classes, pv, pvc, persistent volumes, persistent volume claims, backends, expand volumes, import volumes 
+summary: Trident oferece diversos recursos para o gerenciamento de seus volumes. Saiba mais sobre as funcionalidades que o Trident oferece para volumes. 
+---
+= Execute operações de volume do Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Conheça os recursos que Trident oferece para gerenciar seus volumes.
+
+
+
+[[managing-volumes]]
+== Gerenciamento de volumes
+
+Consulte as informações a seguir para saber como gerenciar seus volumes com Trident.
+
+* link:csi-topology.html["Usar a topologia CSI"^]
+* link:vol-snapshots.html["Trabalhar com Snapshots"^]
+* link:vol-expansion.html["Expandir volumes"^]
+* link:vol-import.html["Importar volumes"^]
+

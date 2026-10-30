@@ -1,0 +1,535 @@
+---
+sidebar: sidebar 
+permalink: trident-use/worker-node-prep.html 
+keywords: storage class, manage storage class, storage classes, kubernetes storage classes, worker node, nfs, iscsi, kubernetes clusters, self-healing, healing, nvme, tcp 
+summary: Todos os nós de trabalho no cluster Kubernetes precisam ser capazes de montar os volumes que você provisionou para seus pods. Se você estiver usando o driver ontap-nas, ontap-nas-economy ou ontap-nas-flexgroup para um de seus backends, seus nós de trabalho precisam das ferramentas NFS. Caso contrário, eles exigem as ferramentas iSCSI. 
+---
+= Prepare o nó de trabalho do Trident
+:hardbreaks:
+:allow-uri-read: 
+:icons: font
+:imagesdir: ../media/
+
+
+[role="lead"]
+Todos os nós de trabalho no cluster Kubernetes devem ser capazes de montar os volumes que você provisionou para seus pods. Para preparar os nós de trabalho, você deve instalar as ferramentas NFS, iSCSI, NVMe/TCP ou FC, dependendo da seleção do driver.
+
+
+
+[[selecting-the-right-tools]]
+== Selecionando as ferramentas certas
+
+Se você estiver usando uma combinação de drivers, deverá instalar todas as ferramentas necessárias para seus drivers. Versões recentes do Red Hat Enterprise Linux CoreOS (RHCOS) têm as ferramentas instaladas por padrão.
+
+.Ferramentas NFS
+link:https://docs.netapp.com/us-en/trident/trident-use/worker-node-prep.html#nfs-volumes["Instale as ferramentas NFS"] se você estiver usando: `ontap-nas`, `ontap-nas-economy`, `ontap-nas-flexgroup`, ou `azure-netapp-files`.
+
+.Ferramentas iSCSI
+link:https://docs.netapp.com/us-en/trident/trident-use/worker-node-prep.html#install-the-iscsi-tools["Instale as ferramentas iSCSI"] se você estiver usando: `ontap-san`, `ontap-san-economy`, `solidfire-san`.
+
+.Ferramentas NVMe
+link:https://docs.netapp.com/us-en/trident/trident-use/worker-node-prep.html#nvmetcp-volumes["Instale as ferramentas NVMe"] se você estiver usando  `ontap-san` para nonvolatile memory express (NVMe) sobre o protocolo TCP (NVMe/TCP).
+
+
+NOTE: NetApp recomenda ONTAP 9.12 ou posterior para NVMe/TCP.
+
+.Ferramentas SCSI sobre FC
+Consulte link:https://docs.netapp.com/us-en/ontap/san-config/configure-fc-nvme-hosts-ha-pairs-reference.html["Formas de configurar hosts SAN FC e FC-NVMe"] para obter mais informações sobre como configurar seus hosts SAN FC e FC-NVMe.
+
+link:https://docs.netapp.com/us-en/trident/trident-use/worker-node-prep.html#install-the-fc-tools["Instale as ferramentas FC"] se você estiver usando  `ontap-san` com sanType `fcp` (SCSI sobre FC).
+
+*Pontos a considerar*: * SCSI sobre FC é suportado em OpenShift e KubeVirt ambientes. * SCSI sobre FC não é suportado no Docker. * A autorrecuperação iSCSI não se aplica ao SCSI sobre FC.
+
+.Ferramentas SMB
+link:https://docs.netapp.com/us-en/trident/trident-use/worker-node-prep.html#prepare-to-provision-smb-volumes["Prepare-se para provisionar volumes SMB"] se você estiver usando: `ontap-nas` para provisionar volumes SMB.
+
+
+
+[[node-service-discovery]]
+== Descoberta de serviço de nó
+
+Trident tenta detectar automaticamente se o nó pode executar serviços iSCSI ou NFS.
+
+
+NOTE: A descoberta de serviços de nó identifica os serviços descobertos, mas não garante que estejam configurados corretamente. Por outro lado, a ausência de um serviço descoberto não garante que a montagem do volume falhará.
+
+.Revisar eventos
+Trident cria eventos para o nó a fim de identificar os serviços descobertos. Para revisar esses eventos, execute:
+
+[listing]
+----
+kubectl get event -A --field-selector involvedObject.name=<Kubernetes node name>
+----
+.Revisar serviços descobertos
+Trident identifica os serviços habilitados para cada nó no Trident node CR. Para visualizar os serviços descobertos, execute:
+
+[listing]
+----
+tridentctl get node -o wide -n <Trident namespace>
+----
+
+
+[[nfs-volumes]]
+== Volumes NFS
+
+Instale as ferramentas NFS usando os comandos para o seu sistema operacional. Certifique-se de que o serviço NFS seja iniciado durante a inicialização.
+
+[role="tabbed-block"]
+====
+.RHEL 8+
+--
+[listing]
+----
+sudo yum install -y nfs-utils
+----
+--
+.Ubuntu
+--
+[listing]
+----
+sudo apt-get install -y nfs-common
+----
+--
+====
+
+WARNING: Reinicie os nós de trabalho após instalar as ferramentas NFS para evitar falhas ao conectar volumes aos contêineres.
+
+
+
+[[iscsi-volumes]]
+== volumes iSCSI
+
+Trident pode estabelecer automaticamente uma sessão iSCSI, analisar LUNs, descobrir dispositivos multipath, formatá-los e montá-los em um pod.
+
+
+
+[[iscsi-self-healing-capabilities]]
+=== Capacidades de autorrecuperação do iSCSI
+
+Para sistemas ONTAP, Trident executa a autorrecuperação iSCSI a cada cinco minutos para:
+
+. *Identifique* o estado desejado da sessão iSCSI e o estado atual da sessão iSCSI.
+. *Compare* o estado desejado com o estado atual para identificar os reparos necessários. Trident determina as prioridades de reparo e quando antecipar os reparos.
+. *Executar os reparos* necessários para retornar o estado atual da sessão iSCSI ao estado desejado da sessão iSCSI.
+
+
+
+NOTE: Os registros de atividades de autorrecuperação estão localizados no contêiner  `trident-main` no respectivo pod do Daemonset. Para visualizar os registros, você deve ter definido  `debug` como "true" durante a instalação do Trident.
+
+As capacidades de autorrecuperação do Trident iSCSI podem ajudar a prevenir:
+
+* Sessões iSCSI obsoletas ou com problemas de funcionamento que podem ocorrer após uma falha de conectividade de rede. No caso de uma sessão obsoleta, Trident aguarda sete minutos antes de encerrar a sessão para restabelecer a conexão com um portal.
++
+
+NOTE: Por exemplo, se os segredos CHAP forem rotacionados no controlador de armazenamento e a rede perder a conectividade, os segredos CHAP antigos (desatualizados) podem persistir. A autorrecuperação pode reconhecer isso e restabelecer automaticamente a sessão para aplicar os segredos CHAP atualizados.
+
+* Sessões iSCSI ausentes
+* LUNs ausentes
+
+
+*Pontos a considerar antes de atualizar Trident*
+
+* Se apenas igroups por nó (introduzidos na 23.04+) estiverem em uso, a autorrecuperação iSCSI iniciará novas varreduras SCSI para todos os dispositivos no barramento SCSI.
+* Se apenas igroups com escopo de backend (obsoletos a partir da versão 23.04) estiverem em uso, a autorrecuperação iSCSI iniciará novas varreduras SCSI para os IDs de LUN exatos no barramento SCSI.
+* Se uma combinação de igroups por nó e igroups com escopo de backend estiver em uso, a autorrecuperação iSCSI iniciará novas varreduras SCSI para os IDs de LUN exatos no barramento SCSI.
+
+
+
+
+[[install-the-iscsi-tools]]
+=== Instale as ferramentas iSCSI
+
+Instale as ferramentas iSCSI usando os comandos para o seu sistema operacional.
+
+.Antes de começar
+* Cada nó no cluster Kubernetes deve ter um IQN único. *Este é um pré-requisito necessário*.
+* Se estiver usando o RHCOS versão 4.5 ou posterior, ou outra distribuição Linux compatível com RHEL, com o  `solidfire-san` driver e Element OS 12.5 ou anterior, certifique-se de que o algoritmo de autenticação CHAP esteja definido como MD5 em  `/etc/iscsi/iscsid.conf`. Algoritmos CHAP seguros compatíveis com FIPS, SHA1, SHA-256 e SHA3-256 estão disponíveis com Element 12.7.
++
+[listing]
+----
+sudo sed -i 's/^\(node.session.auth.chap_algs\).*/\1 = MD5/' /etc/iscsi/iscsid.conf
+----
+* Ao usar nós de trabalho que executam RHEL/Red Hat Enterprise Linux CoreOS (RHCOS) com iSCSI PVs, especifique o  `discard` mountOption em StorageClass para realizar exigência de espaço inline. Consulte https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/managing_file_systems/discarding-unused-blocks_managing-file-systems["Documentação Red Hat"^].
+* Certifique-se de ter atualizado para a versão mais recente do `multipath-tools`.
+
+
+[role="tabbed-block"]
+====
+.RHEL 8+
+--
+. Instale os seguintes pacotes do sistema:
++
+[listing]
+----
+sudo yum install -y lsscsi iscsi-initiator-utils device-mapper-multipath
+----
+. Verifique se a versão do iscsi-initiator-utils é 6.2.0.874-2.el7 ou posterior:
++
+[listing]
+----
+rpm -q iscsi-initiator-utils
+----
+. Defina a digitalização como manual:
++
+[listing]
+----
+sudo sed -i 's/^\(node.session.scan\).*/\1 = manual/' /etc/iscsi/iscsid.conf
+----
+. Ative multipathing:
++
+[listing]
+----
+sudo mpathconf --enable --with_multipathd y --find_multipaths n
+----
++
+
+NOTE: Certifique-se de que  `/etc/multipath.conf` contenha  `find_multipaths no` sob  `defaults`.
+
+. Certifique-se de que  `iscsid` e  `multipathd` estejam em execução:
++
+[listing]
+----
+sudo systemctl enable --now iscsid multipathd
+----
+. Ativar e iniciar `iscsi`:
++
+[listing]
+----
+sudo systemctl enable --now iscsi
+----
+
+
+--
+.Ubuntu
+--
+. Instale os seguintes pacotes do sistema:
++
+[listing]
+----
+sudo apt-get install -y open-iscsi lsscsi sg3-utils multipath-tools scsitools
+----
+. Verifique se a versão do open-iscsi é 2.0.874-5ubuntu2.10 ou posterior (para bionic) ou 2.0.874-7.1ubuntu6.1 ou posterior (para focal):
++
+[listing]
+----
+dpkg -l open-iscsi
+----
+. Defina a digitalização como manual:
++
+[listing]
+----
+sudo sed -i 's/^\(node.session.scan\).*/\1 = manual/' /etc/iscsi/iscsid.conf
+----
+. Ative multipathing:
++
+[listing]
+----
+sudo tee /etc/multipath.conf <<-EOF
+defaults {
+    user_friendly_names yes
+    find_multipaths no
+}
+EOF
+sudo systemctl enable --now multipath-tools.service
+sudo service multipath-tools restart
+----
++
+
+NOTE: Certifique-se de que  `/etc/multipath.conf` contenha  `find_multipaths no` sob  `defaults`.
+
+. Certifique-se de que  `open-iscsi` e  `multipath-tools` estejam habilitados e em execução:
++
+[listing]
+----
+sudo systemctl status multipath-tools
+sudo systemctl enable --now open-iscsi.service
+sudo systemctl status open-iscsi
+----
++
+
+NOTE: Para o Ubuntu 18.04, você deve descobrir as portas de destino com `iscsiadm` antes de iniciar `open-iscsi` para que o daemon iSCSI seja iniciado. Você pode, alternativamente, modificar o serviço  `iscsi` para iniciar `iscsid` automaticamente.
+
+
+
+--
+====
+
+
+[[configure-or-disable-iscsi-self-healing]]
+=== Configurar ou desativar autorrecuperação iSCSI
+
+Você pode configurar as seguintes configurações de autorrecuperação do Trident iSCSI para corrigir sessões obsoletas:
+
+* *Intervalo de autorrecuperação do iSCSI*: Determina a frequência com que a autorrecuperação do iSCSI é acionada (padrão: 5 minutos). Você pode configurá-lo para ser executado com mais frequência definindo um número menor ou com menos frequência definindo um número maior.
+
+
+[NOTE]
+====
+Definir o intervalo de autorrecuperação do iSCSI para 0 interrompe a autorrecuperação do iSCSI completamente. Não recomendamos desativar a autorrecuperação do iSCSI; ela só deve ser desativada em certos cenários, quando a autorrecuperação do iSCSI não estiver funcionando conforme o esperado ou para fins de depuração.
+
+====
+* *iSCSI Self-Healing Wait Time*: Determina a duração que a autorrecuperação do iSCSI aguarda antes de fazer logout de uma sessão com problemas e tentar fazer login novamente (padrão: 7 minutos). Você pode configurar para um número maior, de modo que as sessões identificadas como com problemas tenham que esperar mais tempo antes de serem desconectadas e, em seguida, uma tentativa de login seja feita, ou para um número menor para fazer logout e login mais cedo.
+
+
+[role="tabbed-block"]
+====
+.Helm
+--
+Para configurar ou alterar as configurações de autorrecuperação do iSCSI, passe os  `iscsiSelfHealingInterval` e  `iscsiSelfHealingWaitTime` parâmetros durante a instalação ou atualização do helm.
+
+O exemplo a seguir define o intervalo de autorrecuperação do iSCSI para 3 minutos e o tempo de espera para autorrecuperação para 6 minutos:
+
+[listing]
+----
+helm install trident trident-operator-100.2606.0.tgz --set iscsiSelfHealingInterval=3m0s --set iscsiSelfHealingWaitTime=6m0s -n trident
+----
+--
+.tridentctl
+--
+Para configurar ou alterar as configurações de autorrecuperação do iSCSI, passe os  `iscsi-self-healing-interval` e  `iscsi-self-healing-wait-time` parâmetros durante a instalação ou atualização do tridentctl.
+
+O exemplo a seguir define o intervalo de autorrecuperação do iSCSI para 3 minutos e o tempo de espera para autorrecuperação para 6 minutos:
+
+[listing]
+----
+tridentctl install --iscsi-self-healing-interval=3m0s --iscsi-self-healing-wait-time=6m0s -n trident
+----
+--
+====
+
+
+[[nvmetcp-volumes]]
+== Volumes NVMe/TCP
+
+Instale as ferramentas NVMe usando os comandos para o seu sistema operacional.
+
+[NOTE]
+====
+* NVMe requer RHEL 9 ou posterior.
+* Se a versão do kernel do seu nó Kubernetes for muito antiga ou se o pacote NVMe não estiver disponível para a sua versão do kernel, talvez seja necessário atualizar a versão do kernel do seu nó para uma com o pacote NVMe.
+
+
+====
+[role="tabbed-block"]
+====
+.RHEL 9
+--
+[listing]
+----
+sudo yum install nvme-cli
+sudo yum install linux-modules-extra-$(uname -r)
+sudo modprobe nvme-tcp
+----
+--
+.Ubuntu
+--
+[listing]
+----
+sudo apt install nvme-cli
+sudo apt -y install linux-modules-extra-$(uname -r)
+sudo modprobe nvme-tcp
+----
+--
+====
+
+
+[[verify-installation]]
+=== Verificar instalação
+
+Após a instalação, verifique se cada nó no cluster Kubernetes possui um NQN exclusivo usando o comando:
+
+[listing]
+----
+cat /etc/nvme/hostnqn
+----
+
+WARNING: Trident modifica o  `ctrl_device_tmo` valor para garantir que o NVMe não abandone o caminho caso ocorra uma falha. Não altere essa configuração.
+
+
+
+[[scsi-over-fc-volumes]]
+== Volumes SCSI over FC
+
+Agora você pode usar o protocolo Fibre Channel (FC) com Trident para provisionar e gerenciar recursos de storage no sistema ONTAP.
+
+
+
+[[prerequisites]]
+=== Pré-requisitos
+
+Configurar as definições de rede e de nó necessárias para FC.
+
+
+
+==== Configurações de rede
+
+. Obtenha o WWPN das interfaces de destino. Consulte  https://docs.netapp.com/us-en/ontap-cli//network-interface-show.html["network interface show"^] para obter mais informações.
+. Obtenha o WWPN para as interfaces no iniciador (Host).
++
+Consulte os utilitários correspondentes do sistema operacional do host.
+
+. Configurar o zoneamento no switch FC usando os WWPNs do host e do destino.
++
+Consulte a documentação do respectivo fornecedor do switch para obter informações.
+
++
+Consulte a seguinte documentação do ONTAP para obter detalhes:
+
++
+** https://docs.netapp.com/us-en/ontap/san-config/fibre-channel-fcoe-zoning-concept.html["Visão geral do zoneamento Fibre Channel e FCoE"^]
+** https://docs.netapp.com/us-en/ontap/san-config/configure-fc-nvme-hosts-ha-pairs-reference.html["Formas de configurar hosts SAN FC e FC-NVMe"^]
+
+
+
+
+
+
+[[install-the-fc-tools]]
+=== Instale as ferramentas FC
+
+Instale as ferramentas FC usando os comandos para o seu sistema operacional.
+
+* Ao usar nós de trabalho que executam RHEL/Red Hat Enterprise Linux CoreOS (RHCOS) com FC PVs, especifique o  `discard` mountOption na StorageClass para realizar exigência de espaço inline. Consulte https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/managing_file_systems/discarding-unused-blocks_managing-file-systems["Documentação Red Hat"^].
+
+
+[role="tabbed-block"]
+====
+.RHEL 8+
+--
+. Instale os seguintes pacotes do sistema:
++
+[listing]
+----
+sudo yum install -y lsscsi device-mapper-multipath
+----
+. Ative multipathing:
++
+[listing]
+----
+sudo mpathconf --enable --with_multipathd y --find_multipaths n
+----
++
+
+NOTE: Certifique-se de que  `/etc/multipath.conf` contenha  `find_multipaths no` sob  `defaults`.
+
+. Certifique-se de que  `multipathd` está em execução:
++
+[listing]
+----
+sudo systemctl enable --now multipathd
+----
+
+
+--
+.Ubuntu
+--
+. Instale os seguintes pacotes do sistema:
++
+[listing]
+----
+sudo apt-get install -y lsscsi sg3-utils multipath-tools scsitools
+----
+. Ative multipathing:
++
+[listing]
+----
+sudo tee /etc/multipath.conf <<-EOF
+defaults {
+    user_friendly_names yes
+    find_multipaths no
+}
+EOF
+sudo systemctl enable --now multipath-tools.service
+sudo service multipath-tools restart
+----
++
+
+NOTE: Certifique-se de que  `/etc/multipath.conf` contenha  `find_multipaths no` sob  `defaults`.
+
+. Certifique-se de que  `multipath-tools` está ativado e em execução:
++
+[listing]
+----
+sudo systemctl status multipath-tools
+----
+
+
+--
+====
+
+
+[[prepare-to-provision-smb-volumes]]
+== Prepare-se para provisionar volumes SMB
+
+Você pode provisionar volumes SMB usando `ontap-nas` drivers.
+
+
+WARNING: Você deve configurar ambos os protocolos NFS e SMB/CIFS na SVM para criar um  `ontap-nas-economy` volume SMB para clusters ONTAP locais. A falha ao configurar qualquer um desses protocolos fará com que a criação do volume SMB falhe.
+
+
+NOTE: `autoExportPolicy` não é compatível com volumes SMB.
+
+.Antes de começar
+Antes de poder provisionar volumes SMB, você deve ter o seguinte.
+
+* Um cluster Kubernetes com um nó controlador Linux e pelo menos um nó de trabalho Windows executando Windows Server 2022. Trident suporta volumes SMB montados em pods executados apenas em nós Windows.
+* Pelo menos um segredo Trident contendo suas credenciais do Active Directory. Para gerar o segredo `smbcreds`:
++
+[listing]
+----
+kubectl create secret generic smbcreds --from-literal username=user --from-literal password='password'
+----
+* Um proxy CSI configurado como um serviço do Windows. Para configurar um `csi-proxy`, consulte link:https://github.com/kubernetes-csi/csi-proxy["GitHub: CSI Proxy"^] ou link:https://github.com/Azure/aks-engine/blob/master/docs/topics/csi-proxy-windows.md["GitHub: CSI Proxy para Windows"^] para nós do Kubernetes em execução no Windows.
+
+
+.Passos
+. Para o ONTAP local, você pode opcionalmente criar um compartilhamento SMB ou o Trident pode criar um para você.
++
+
+NOTE: Os compartilhamentos SMB são necessários para Amazon FSx for ONTAP.
+
++
+Você pode criar os compartilhamentos administrativos SMB de duas maneiras: usando o link:https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/what-is-microsoft-management-console["Microsoft Management Console"^] snap-in Shared Folders ou usando a ONTAP CLI. Para criar os compartilhamentos SMB usando a ONTAP CLI:
+
++
+.. Se necessário, crie a estrutura de caminho de diretórios para o compartilhamento.
++
+O  `vserver cifs share create` comando verifica o caminho especificado na opção -path durante a criação do compartilhamento. Se o caminho especificado não existir, o comando falha.
+
+.. Crie um compartilhamento SMB associado à SVM especificada:
++
+[listing]
+----
+vserver cifs share create -vserver vserver_name -share-name share_name -path path [-share-properties share_properties,...] [other_attributes] [-comment text]
+----
+.. Verifique se o compartilhamento foi criado:
++
+[listing]
+----
+vserver cifs share show -share-name share_name
+----
++
+
+NOTE: Consulte link:https://docs.netapp.com/us-en/ontap/smb-config/create-share-task.html["Criar um compartilhamento SMB"^] para obter detalhes completos.
+
+
+
+. Ao criar o backend, você deve configurar o seguinte para especificar os volumes SMB. Para todas as opções de configuração do backend do FSx para ONTAP, consulte link:trident-fsx-examples.html["Opções e exemplos de configuração do FSx for ONTAP"].
++
+[cols="1,2,1"]
+|===
+| Parâmetro | Descrição | Exemplo 
+
+
+| `smbShare` | Você pode especificar uma das seguintes opções: o nome de um compartilhamento SMB criado usando o Microsoft Management Console ou ONTAP CLI; um nome para permitir que o Trident crie o compartilhamento SMB; ou você pode deixar o parâmetro em branco para impedir o acesso comum aos volumes. Este parâmetro é opcional para ONTAP on-premises. Este parâmetro é obrigatório para Amazon FSx for ONTAP backends e não pode ficar em branco. | `smb-share` 
+
+
+| `nasType` | *Deve ser definido como `smb`.* Se for nulo, o padrão é `nfs`. | `smb` 
+
+
+| `securityStyle` | Estilo de segurança para novos volumes. *Deve ser definido como  `ntfs` ou  `mixed` para volumes SMB.* | `ntfs` ou  `mixed` for SMB volumes 
+
+
+| `unixPermissions` | Modo para novos volumes. *Deve ser deixado em branco para volumes SMB.* | "" 
+|===
+
